@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Gladys Tuti{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="{{ url_for('index') }}">Gladys <span>Tuti</span></a>
+    {% if is_admin %}
+    <nav class="admin">
+      <a href="{{ url_for('admin') }}">Orders</a>
+      <a href="{{ url_for('admin_settings') }}">Payment details</a>
+      <form method="post" action="{{ url_for('admin_logout') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button class="btn ghost small" type="submit">Log out</button>
+      </form>
+    </nav>
+    {% endif %}
+  </div>
+</header>
+<main class="wrap">
+  {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</main>
+<footer class="site">
+  <div class="wrap">No refunds once an ebook has been downloaded. &copy; Gladys Tuti</div>
+</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

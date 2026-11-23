@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Ebooks by Gladys Tuti</h1>
+<p class="lede">Pay, then download. Your ebook is yours straight away.</p>
+<div class="grid">
+  {% for p in products %}
+  <div class="card">
+    {% if p.cover_file %}<img class="cover" src="{{ url_for('cover', pid=p.id) }}" alt="Cover of {{ p.title }}">
+    {% else %}<div class="cover-ph">{{ p.title }}</div>{% endif %}
+    <div class="body">
+      <h3>{{ p.title }}</h3>
+      {% if p.subtitle %}<p class="sub">{{ p.subtitle }}</p>{% endif %}
+      <div class="prices">
+        <b>{{ p.price_usd|money('USD') }}</b>
+        <span>{{ p.price_kes|money('KES') }}</span>
+        <span>{{ p.price_ngn|money('NGN') }}</span>
+      </div>
+      {% if p.ebook_file %}
+      <a class="btn" href="{{ url_for('buy', pid=p.id) }}">Buy now</a>
+      {% else %}
+      <span class="soon">Coming soon</span>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <p>No ebooks yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

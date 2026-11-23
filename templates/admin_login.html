@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Admin | Gladys Tuti{% endblock %}
+{% block content %}
+<div style="max-width:360px">
+  <h1>Admin</h1>
+  <form method="post">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" required autofocus>
+    <p><button class="btn" type="submit">Log in</button></p>
+  </form>
+</div>
+{% endblock %}

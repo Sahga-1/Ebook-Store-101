@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Your order | Gladys Tuti{% endblock %}
+{% block head %}{% if o.status == 'pending' %}<meta http-equiv="refresh" content="60">{% endif %}{% endblock %}
+{% block content %}
+{% if o.status == 'paid' %}
+<div class="status ok">
+  <h2>Payment confirmed</h2>
+  <p><b>{{ o.title }}</b> is ready, {{ o.name }}.</p>
+  <p><a class="btn" href="{{ url_for('download', token=o.token) }}">Download ebook</a></p>
+  <p class="hint">Bookmark this page. You can come back to it and download again any time. No refunds once it has been downloaded.</p>
+</div>
+{% elif o.status == 'rejected' %}
+<div class="status">
+  <h2>We couldn't find your payment</h2>
+  <p>We didn't see {{ o.amount|money(o.currency) }} arrive for <b>{{ o.title }}</b>. If you did pay, send us your payment reference and we'll sort it out.</p>
+</div>
+{% else %}
+<div class="status">
+  <h2>Thank you, {{ o.name }}</h2>
+  <p>We're checking your {{ METHOD_LABEL[o.method] }} payment of <b>{{ o.amount|money(o.currency) }}</b> for <b>{{ o.title }}</b>.</p>
+  <p>As soon as it's confirmed, the download button appears on this page and the link is emailed to {{ o.email }}. This page refreshes by itself every minute.</p>
+  <p class="hint">Bookmark this page so you can find it again.</p>
+</div>
+{% endif %}
+{% endblock %}

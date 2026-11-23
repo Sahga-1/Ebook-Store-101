@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Orders | Gladys Tuti{% endblock %}
+{% block content %}
+<h1>Payments to check</h1>
+<p class="hint" style="margin-bottom:14px">Open your bank or Opay app, find the money, then approve. Only approve what you can see in your account.</p>
+<div class="table-wrap">
+<table>
+  <tr><th>When</th><th>Buyer</th><th>Ebook</th><th>Paid via</th><th>Amount</th><th>Their reference</th><th></th></tr>
+  {% for o in pending %}
+  <tr>
+    <td>{{ o.created|when }}</td>
+    <td>{{ o.name }}<br><span class="hint">{{ o.email }}</span></td>
+    <td>{{ o.title }}</td>
+    <td>{{ METHOD_LABEL[o.method] }}</td>
+    <td><b>{{ o.amount|money(o.currency) }}</b></td>
+    <td>{{ o.reference }}</td>
+    <td><div class="row">
+      <form method="post" action="{{ url_for('admin_order', oid=o.id, action='approve') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="btn small" type="submit">Approve</button></form>
+      <form method="post" action="{{ url_for('admin_order', oid=o.id, action='reject') }}" onsubmit="return confirm('Reject this payment?')">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="btn ghost small" type="submit">Reject</button></form>
+    </div></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7" class="hint">Nothing waiting.</td></tr>
+  {% endfor %}
+</table>
+</div>
+
+<h2>Ebooks</h2>
+<div class="table-wrap">
+<table>
+  <tr><th>Title</th><th>USD</th><th>KES</th><th>NGN</th><th>File</th><th>Shown</th><th></th></tr>
+  {% for p in products %}
+  <tr>
+    <td>{{ p.title }}</td>
+    <td>{{ p.price_usd|money('USD') }}</td><td>{{ p.price_kes|money('KES') }}</td><td>{{ p.price_ngn|money('NGN') }}</td>
+    <td>{{ 'Uploaded' if p.ebook_file else 'Missing' }}</td>
+    <td>{{ 'Yes' if p.active else 'Hidden' }}</td>
+    <td><a href="{{ url_for('admin_product', pid=p.id) }}">Edit / upload</a></td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<p><a class="btn" href="{{ url_for('admin_product') }}">Add an ebook</a></p>
+
+<h2 style="margin-top:36px">Recent orders</h2>
+<div class="table-wrap">
+<table>
+  <tr><th>When</th><th>Buyer</th><th>Ebook</th><th>Via</th><th>Amount</th><th>Status</th><th>Downloads</th><th>Buyer's page</th></tr>
+  {% for o in recent %}
+  <tr>
+    <td>{{ o.created|when }}</td>
+    <td>{{ o.name }}<br><span class="hint">{{ o.email }}</span></td>
+    <td>{{ o.title }}</td>
+    <td>{{ METHOD_LABEL[o.method] }}</td>
+    <td>{{ o.amount|money(o.currency) }}</td>
+    <td><span class="tag {{ o.status }}">{{ o.status }}</span></td>
+    <td>{{ o.downloads }}</td>
+    <td>{% if o.status == 'paid' %}<a href="{{ url_for('order', token=o.token) }}">Open link</a>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="8" class="hint">No orders yet.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Ebook | Gladys Tuti{% endblock %}
+{% block content %}
+<h1>{{ 'Edit ebook' if p and p.id is defined else 'Add an ebook' }}</h1>
+<form method="post" enctype="multipart/form-data" style="max-width:620px">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <label for="title">Title</label>
+  <input id="title" name="title" type="text" required value="{{ p.title if p else '' }}">
+  <label for="subtitle">One line under the title</label>
+  <input id="subtitle" name="subtitle" type="text" value="{{ p.subtitle if p else '' }}">
+  <label for="description">Description</label>
+  <textarea id="description" name="description">{{ p.description if p else '' }}</textarea>
+
+  <div class="three">
+    <div><label for="price_usd">Price, USD</label><input id="price_usd" name="price_usd" type="number" step="0.01" min="0" value="{{ p.price_usd if p else 0 }}"></div>
+    <div><label for="price_kes">Price, KES</label><input id="price_kes" name="price_kes" type="number" step="1" min="0" value="{{ p.price_kes if p else 0 }}"></div>
+    <div><label for="price_ngn">Price, NGN</label><input id="price_ngn" name="price_ngn" type="number" step="1" min="0" value="{{ p.price_ngn if p else 0 }}"></div>
+  </div>
+
+  <label for="ebook">Ebook file (PDF or EPUB){% if p and p.ebook_file %} <span class="tag paid">uploaded</span>{% endif %}</label>
+  <input id="ebook" name="ebook" type="file" accept=".pdf,.epub">
+  <div class="hint">{% if p and p.ebook_file %}Choose a new file to replace the current one. Leave empty to keep it.{% else %}The ebook can't be bought until a file is uploaded.{% endif %}</div>
+
+  <label for="cover">Cover image (PNG, JPG or WEBP)</label>
+  <input id="cover" name="cover" type="file" accept=".png,.jpg,.jpeg,.webp">
+  <div class="hint">Portrait, about 3:4, works best.</div>
+
+  <label class="terms" style="color:var(--ink);font-size:15px"><input type="checkbox" name="active" {{ 'checked' if (not p) or p.active else '' }}> Show on the store</label>
+  <p style="margin-top:22px"><button class="btn" type="submit">Save</button>
+  <a class="btn ghost" href="{{ url_for('admin') }}">Cancel</a></p>
+</form>
+{% endblock %}

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ p.title }} | Gladys Tuti{% endblock %}
+{% block content %}
+<div class="buy-layout">
+  <div>
+    {% if p.cover_file %}<img class="cover" style="width:100%" src="{{ url_for('cover', pid=p.id) }}" alt="Cover of {{ p.title }}">
+    {% else %}<div class="cover-ph">{{ p.title }}</div>{% endif %}
+  </div>
+  <div>
+    <h1>{{ p.title }}</h1>
+    {% if p.subtitle %}<p class="lede" style="margin-bottom:12px">{{ p.subtitle }}</p>{% endif %}
+    {% if p.description %}<p>{{ p.description }}</p>{% endif %}
+
+    {% if not methods %}
+      <div class="status">Checkout isn't switched on yet. Please check back soon.</div>
+    {% else %}
+    <form id="f" method="post" action="{{ url_for('buy_manual', pid=p.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <label for="name">Your name</label>
+      <input id="name" name="name" type="text" required maxlength="120" autocomplete="name">
+      <label for="email">Email (your download link goes here)</label>
+      <input id="email" name="email" type="email" required maxlength="200" autocomplete="email">
+
+      <label>How do you want to pay?</label>
+      <div class="methods">
+        {% if 'paypal' in methods %}
+        <label class="method"><input type="radio" name="method" value="paypal" {{ 'checked' if methods[0]=='paypal' }}>
+          <span>PayPal or card<br><small style="color:var(--muted);font-weight:400">Anywhere in the world. Pounds and euros are converted by PayPal.</small></span>
+          <span class="amt">{{ p.price_usd|money('USD') }}</span></label>
+        {% endif %}
+        {% if 'bank' in methods %}
+        <label class="method"><input type="radio" name="method" value="bank" {{ 'checked' if methods[0]=='bank' }}>
+          <span>Kenya, bank transfer</span><span class="amt">{{ p.price_kes|money('KES') }}</span></label>
+        {% endif %}
+        {% if 'opay' in methods %}
+        <label class="method"><input type="radio" name="method" value="opay" {{ 'checked' if methods[0]=='opay' }}>
+          <span>Nigeria, Opay</span><span class="amt">{{ p.price_ngn|money('NGN') }}</span></label>
+        {% endif %}
+      </div>
+
+      {% if 'bank' in methods %}
+      <div class="panel" data-panel="bank" hidden>
+        <strong>Send {{ p.price_kes|money('KES') }} to:</strong>
+        <pre class="details">{{ bank }}</pre>
+      </div>
+      {% endif %}
+      {% if 'opay' in methods %}
+      <div class="panel" data-panel="opay" hidden>
+        <strong>Send {{ p.price_ngn|money('NGN') }} to:</strong>
+        <pre class="details">{{ opay }}</pre>
+      </div>
+      {% endif %}
+
+      <div id="manual-extra" hidden>
+        <label for="reference">Payment reference, or the name you paid from</label>
+        <input id="reference" name="reference" type="text" maxlength="200">
+        <div class="hint">Once your payment is checked, your download link is emailed to you and shown on the page you land on next. This usually takes a short while, not instantly.</div>
+      </div>
+
+      <label class="terms"><input type="checkbox" name="terms" id="terms" required>
+        <span>I understand there are no refunds once I've downloaded the ebook.</span></label>
+
+      <div id="paypal-buttons" style="margin-top:18px" hidden></div>
+      <div class="err" id="err"></div>
+      <button class="btn" id="submit" type="submit" style="margin-top:18px" hidden>I've paid, check my payment</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block head %}
+{% if paypal_client_id %}
+<script src="https://www.paypal.com/sdk/js?client-id={{ paypal_client_id }}&currency=USD&intent=capture" data-sdk-integration-source="button-factory"></script>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if methods %}
+<script>
+(function () {
+  var f = document.getElementById('f');
+  var err = document.getElementById('err');
+  var csrf = {{ csrf_token|tojson }};
+  var pid = {{ p.id }};
+  var radios = f.querySelectorAll('input[name=method]');
+  var ppBox = document.getElementById('paypal-buttons');
+  var submit = document.getElementById('submit');
+  var extra = document.getElementById('manual-extra');
+  var ref = document.getElementById('reference');
+
+  function current() {
+    for (var i = 0; i < radios.length; i++) if (radios[i].checked) return radios[i].value;
+    return radios.length ? radios[0].value : '';
+  }
+  function update() {
+    var m = current();
+    f.querySelectorAll('[data-panel]').forEach(function (el) { el.hidden = el.dataset.panel !== m; });
+    var manual = (m === 'bank' || m === 'opay');
+    extra.hidden = !manual;
+    submit.hidden = !manual;
+    ref.required = manual;
+    ppBox.hidden = (m !== 'paypal');
+    err.textContent = '';
+  }
+  radios.forEach(function (r) { r.addEventListener('change', update); });
+  if (radios.length && !f.querySelector('input[name=method]:checked')) radios[0].checked = true;
+  update();
+
+  function buyerData() {
+    return {
+      pid: pid,
+      name: f.name.value.trim(),
+      email: f.email.value.trim(),
+      terms: f.terms.checked
+    };
+  }
+
+  if (window.paypal && ppBox) {
+    paypal.Buttons({
+      style: { shape: 'pill', color: 'gold', label: 'pay' },
+      onClick: function (data, actions) {
+        if (!f.checkValidity()) { f.reportValidity(); return actions.reject(); }
+        return actions.resolve();
+      },
+      createOrder: function () {
+        return fetch('/paypal/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF': csrf },
+          body: JSON.stringify(buyerData())
+        }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not start payment.'); return j.id; }); })
+          .catch(function (e) { err.textContent = e.message; throw e; });
+      },
+      onApprove: function (data) {
+        return fetch('/paypal/capture', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF': csrf },
+          body: JSON.stringify({ order_id: data.orderID })
+        }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Payment could not be confirmed.'); window.location = j.redirect; }); })
+          .catch(function (e) { err.textContent = e.message; });
+      },
+      onError: function () { if (!err.textContent) err.textContent = 'PayPal had a problem. Please try again.'; }
+    }).render('#paypal-buttons');
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

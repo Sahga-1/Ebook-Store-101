@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Payment details | Gladys Tuti{% endblock %}
+{% block content %}
+<h1>Payment details</h1>
+<p class="lede">What buyers see when they choose bank transfer or Opay. Leave one empty to hide that option.</p>
+<form method="post" style="max-width:560px">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <label for="bank_details">Kenyan bank account</label>
+  <textarea id="bank_details" name="bank_details" placeholder="Bank:&#10;Account name:&#10;Account number:">{{ bank }}</textarea>
+  <label for="opay_details">Opay (Nigeria)</label>
+  <textarea id="opay_details" name="opay_details" placeholder="Opay number:&#10;Account name:">{{ opay }}</textarea>
+  <p><button class="btn" type="submit">Save</button></p>
+</form>
+<h2 style="margin-top:36px">Set on the server</h2>
+<p>PayPal: <span class="tag {{ 'paid' if paypal else '' }}">{{ 'connected' if paypal else 'not set up' }}</span></p>
+<p>Emails to buyers: <span class="tag {{ 'paid' if smtp else '' }}">{{ 'on' if smtp else 'off' }}</span>
+  {% if not smtp %}<span class="hint">Without email, send each buyer their link yourself from the Orders page.</span>{% endif %}</p>
+{% endblock %}
