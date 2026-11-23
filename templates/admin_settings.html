@@ -9,6 +9,12 @@
   <textarea id="bank_details" name="bank_details" placeholder="Bank:&#10;Account name:&#10;Account number:">{{ bank }}</textarea>
   <label for="opay_details">Opay (Nigeria)</label>
   <textarea id="opay_details" name="opay_details" placeholder="Opay number:&#10;Account name:">{{ opay }}</textarea>
+  <h2 style="margin-top:28px">Download link limits</h2>
+  <p class="hint">Stops a shared link from working. The minutes start counting when the buyer first opens their page after you approve (or after PayPal confirms), not when you press Approve. Buyers can always get a fresh one from you with "Give new link" on the Orders page.</p>
+  <div class="three">
+    <div><label for="max_downloads">Downloads allowed</label><input id="max_downloads" name="max_downloads" type="number" min="1" value="{{ max_dl }}"></div>
+    <div><label for="link_minutes">Link works for (minutes)</label><input id="link_minutes" name="link_minutes" type="number" min="1" value="{{ minutes }}"></div>
+  </div>
   <p><button class="btn" type="submit">Save</button></p>
 </form>
 <h2 style="margin-top:36px">Set on the server</h2>

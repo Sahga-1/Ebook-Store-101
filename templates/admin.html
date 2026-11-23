@@ -47,7 +47,7 @@
 <h2 style="margin-top:36px">Recent orders</h2>
 <div class="table-wrap">
 <table>
-  <tr><th>When</th><th>Buyer</th><th>Ebook</th><th>Via</th><th>Amount</th><th>Status</th><th>Downloads</th><th>Buyer's page</th></tr>
+  <tr><th>When</th><th>Buyer</th><th>Ebook</th><th>Via</th><th>Amount</th><th>Status</th><th>Downloads</th><th>Buyer's page</th><th></th></tr>
   {% for o in recent %}
   <tr>
     <td>{{ o.created|when }}</td>
@@ -58,9 +58,11 @@
     <td><span class="tag {{ o.status }}">{{ o.status }}</span></td>
     <td>{{ o.downloads }}</td>
     <td>{% if o.status == 'paid' %}<a href="{{ url_for('order', token=o.token) }}">Open link</a>{% endif %}</td>
+    <td>{% if o.status == 'paid' %}<form method="post" action="{{ url_for('admin_renew', oid=o.id) }}" onsubmit="return confirm('Give this buyer a fresh download link?')">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="btn ghost small" type="submit">Give new link</button></form>{% endif %}</td>
   </tr>
   {% else %}
-  <tr><td colspan="8" class="hint">No orders yet.</td></tr>
+  <tr><td colspan="9" class="hint">No orders yet.</td></tr>
   {% endfor %}
 </table>
 </div>
