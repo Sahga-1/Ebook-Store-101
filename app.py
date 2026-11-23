@@ -90,7 +90,8 @@ CREATE TABLE IF NOT EXISTS orders (
   status TEXT NOT NULL DEFAULT 'pending',   -- pending | paid | rejected
   downloads INTEGER NOT NULL DEFAULT 0,
   created INTEGER NOT NULL,
-  paid_at INTEGER
+  paid_at INTEGER,
+  link_start INTEGER
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
@@ -136,6 +137,10 @@ def ex(sql, args=()):
 def init_db():
     with sqlite3.connect(DB_PATH) as c:
         c.executescript(SCHEMA)
+        cols = [r[1] for r in c.execute("PRAGMA table_info(orders)")]
+        if "link_start" not in cols:
+            c.execute("ALTER TABLE orders ADD COLUMN link_start INTEGER")
+            c.execute("UPDATE orders SET link_start=paid_at WHERE link_start IS NULL")
         if c.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0:
             for t, s, d, u, k, n in SEED:
                 c.execute(
@@ -235,12 +240,47 @@ def mail_download_link(order):
     return send_mail(
         order["email"], "Your ebook is ready",
         f"Hi {order['name']},\n\nYour payment is confirmed. Download your ebook here:\n"
-        f"{link}\n\nKeep this link, you can come back to it any time.\n\n"
+        f"{link}\n\nOpen it when you're ready to download. The link works once and stops a few "
+        f"minutes after you first open it, so save the file straight away.\n\n"
         f"Gladys Tuti\n")
 
 
 def mark_paid(order_id):
-    ex("UPDATE orders SET status='paid', paid_at=? WHERE id=?", (int(time.time()), order_id))
+    now = int(time.time())
+    # link_start stays empty: the clock starts when the buyer first opens their paid page
+    ex("UPDATE orders SET status='paid', paid_at=?, link_start=NULL WHERE id=?", (now, order_id))
+
+
+def link_limits():
+    def num(key, default):
+        try:
+            return max(1, int(float(setting(key, str(default)))))
+        except ValueError:
+            return default
+    return num("max_downloads", 1), num("link_minutes", 5)
+
+
+UNOPENED_MAX_DAYS = 7   # a paid link nobody opened for this long is retired
+
+
+def start_clock(o):
+    """Start the expiry clock the first time a paid order page or download is opened."""
+    if o["status"] == "paid" and o["link_start"] is None:
+        ex("UPDATE orders SET link_start=? WHERE id=? AND link_start IS NULL",
+           (int(time.time()), o["id"]))
+
+
+def link_state(o):
+    """Returns (usable, downloads_left, seconds_left) for a paid order."""
+    max_dl, minutes = link_limits()
+    now = time.time()
+    left_dl = max(0, max_dl - o["downloads"])
+    if o["link_start"] is None:
+        stale = now > (o["paid_at"] or o["created"]) + UNOPENED_MAX_DAYS * 86400
+        left_t = 0 if stale else minutes * 60
+    else:
+        left_t = max(0, int(o["link_start"] + minutes * 60 - now))
+    return (left_dl > 0 and left_t > 0), left_dl, left_t
 
 
 # ---------------------------------------------------------------- security
@@ -368,19 +408,40 @@ def order(token):
           (token,), one=True)
     if not o:
         abort(404)
-    return render_template("order.html", o=o)
+    if o["status"] == "paid" and o["link_start"] is None and link_state(o)[0]:
+        start_clock(o)
+        o = q("SELECT o.*, p.title FROM orders o JOIN products p ON p.id=o.product_id "
+              "WHERE o.token=?", (token,), one=True)
+    usable, left_dl, left_t = link_state(o) if o["status"] == "paid" else (False, 0, 0)
+    return render_template("order.html", o=o, usable=usable, left_dl=left_dl,
+                           left_min=max(1, -(-left_t // 60)) if left_t else 0)
 
 
 @app.get("/download/<token>")
 def download(token):
-    o = q("SELECT o.id, o.status, p.title, p.ebook_file FROM orders o "
+    o = q("SELECT o.*, p.title, p.ebook_file FROM orders o "
           "JOIN products p ON p.id=o.product_id WHERE o.token=?", (token,), one=True)
     if not o or o["status"] != "paid" or not o["ebook_file"]:
         abort(404)
+    if not link_state(o)[0]:
+        return render_template("message.html", title="This download link has expired",
+                               text="Each purchase can be downloaded a limited number of times. "
+                                    "If you bought this ebook and need your link again, "
+                                    "message us with the email you used."), 410
     path = EBOOKS / o["ebook_file"]
     if not path.exists():
         abort(404)
-    ex("UPDATE orders SET downloads=downloads+1 WHERE id=?", (o["id"],))
+    start_clock(o)
+    # count the download atomically so two quick requests can't both pass the limit
+    max_dl = link_limits()[0]
+    cur = get_db().execute("UPDATE orders SET downloads=downloads+1 WHERE id=? AND downloads<?",
+                           (o["id"], max_dl))
+    get_db().commit()
+    if cur.rowcount != 1:
+        return render_template("message.html", title="This download link has expired",
+                               text="This purchase has already been downloaded. "
+                                    "If you bought this ebook and need your link again, "
+                                    "message us with the email you used."), 410
     return send_file(path, as_attachment=True, download_name=slug(o["title"]) + path.suffix)
 
 
@@ -524,6 +585,17 @@ def admin_order(oid, action):
     return redirect(url_for("admin"))
 
 
+@app.post("/admin/order/<int:oid>/renew")
+@admin_required
+def admin_renew(oid):
+    o = q("SELECT * FROM orders WHERE id=?", (oid,), one=True)
+    if not o or o["status"] != "paid":
+        abort(400)
+    ex("UPDATE orders SET downloads=0, link_start=NULL, paid_at=? WHERE id=?", (int(time.time()), oid))
+    flash("Link renewed. The buyer can download again once they open their page.")
+    return redirect(url_for("admin"))
+
+
 def save_upload(field, folder, allowed, old=""):
     f = request.files.get(field)
     if not f or not f.filename:
@@ -579,9 +651,15 @@ def admin_settings():
     if request.method == "POST":
         set_setting("bank_details", (request.form.get("bank_details") or "").strip())
         set_setting("opay_details", (request.form.get("opay_details") or "").strip())
+        for key in ("max_downloads", "link_minutes"):
+            v = (request.form.get(key) or "").strip()
+            if v.isdigit() and int(v) >= 1:
+                set_setting(key, v)
         flash("Saved.")
         return redirect(url_for("admin_settings"))
-    return render_template("admin_settings.html", bank=setting("bank_details"),
+    max_dl, minutes = link_limits()
+    return render_template("admin_settings.html", max_dl=max_dl, minutes=minutes,
+                           bank=setting("bank_details"),
                            opay=setting("opay_details"), paypal=paypal_ready(),
                            smtp=bool(os.environ.get("SMTP_HOST")))
 
